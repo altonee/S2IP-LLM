@@ -13,17 +13,8 @@ from transformers.models.gpt2.modeling_gpt2 import GPT2Model
 from transformers.models.gpt2.configuration_gpt2 import GPT2Config
 from einops import rearrange
 from transformers import GPT2Tokenizer
-from utils.tokenization import SerializerSettings, serialize_arr,serialize_arr 
+from utils.tokenization import SerializerSettings, serialize_arr
 from .prompt import Prompt 
-
-
-
-
-
-
- 
-
-
 
 
 
@@ -47,16 +38,9 @@ class Model(nn.Module):
         self.tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
         self.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
-        
-
-       
         if configs.pretrained == True:
-           
-          
             self.gpt2 = GPT2Model.from_pretrained('gpt2', output_attentions=True, output_hidden_states=True)
-            self.gpt2.h = self.gpt2.h[:configs.gpt_layers]
-
-            
+            self.gpt2.h = self.gpt2.h[:configs.gpt_layers]  # 加载cheng shu
         else:
             print("------------------no pretrain------------------")
             self.gpt2 = GPT2Model(GPT2Config())
@@ -70,11 +54,6 @@ class Model(nn.Module):
             else:
                 param.requires_grad = False  # False
 
-
-       
-
-        
-
         if self.task_name == 'long_term_forecast':
         
             self.in_layer = nn.Linear(configs.patch_size*3, configs.d_model)
@@ -82,10 +61,6 @@ class Model(nn.Module):
             
             self.prompt_pool = Prompt(length=1, embed_dim=768, embedding_key='mean', prompt_init='uniform', prompt_pool=False, 
                  prompt_key=True, pool_size=self.configs.pool_size, top_k=self.configs.prompt_length, batchwise_prompt=False, prompt_key_init=self.configs.prompt_init,wte = self.gpt2.wte.weight)
-                    
-        
-            
-   
             
             for layer in (self.gpt2, self.in_layer, self.out_layer):       
                 layer.cuda()
@@ -105,11 +80,7 @@ class Model(nn.Module):
    
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
-        
-
-        
-         
-            
+  
         B, L, M = x_enc.shape
             
         means = x_enc.mean(1, keepdim=True).detach()
@@ -120,7 +91,6 @@ class Model(nn.Module):
  
         x = rearrange(x_enc, 'b l m -> (b m) l') 
 
-
         def decompose(x):
             df = pd.DataFrame(x)
             trend = df.rolling(window=self.configs.trend_length, center=True).mean().fillna(method='bfill').fillna(method='ffill')
@@ -129,8 +99,6 @@ class Model(nn.Module):
             residuals = df - trend - seasonal
             combined = np.stack([trend, seasonal, residuals], axis=1)
             return combined
-                
-            
 
         decomp_results = np.apply_along_axis(decompose, 1, x.cpu().numpy())
         x = torch.tensor(decomp_results).to(self.gpt2.device)
@@ -139,18 +107,12 @@ class Model(nn.Module):
         x = x.unfold(dimension=-1, size=self.patch_size, step=self.stride)
         x = rearrange(x, 'b c n p -> b n (c p)', c = 3)  
         pre_prompted_embedding = self.in_layer(x.float())
-
-
-
-
-            
+  
         outs = self.prompt_pool(pre_prompted_embedding)
         prompted_embedding = outs['prompted_embedding']
         sim = outs['similarity']
         prompt_key = outs['prompt_key']
         simlarity_loss = outs['reduce_sim']
-
-               
 
         last_embedding = self.gpt2(inputs_embeds=prompted_embedding).last_hidden_state
         outputs = self.out_layer(last_embedding.reshape(B*M*3, -1))
@@ -162,12 +124,7 @@ class Model(nn.Module):
 
         res = dict()
         res['simlarity_loss'] = simlarity_loss
-            
 
-        
-
-        
-        
         outputs = outputs * stdev[:,:,:M]
         outputs = outputs + means[:,:,:M]
 
