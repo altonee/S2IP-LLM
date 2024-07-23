@@ -255,17 +255,6 @@ class Dataset_ETT_hour_decomposed(Dataset):
         return self.scaler.inverse_transform(data)
 
 
-
-
-
-
-
-
-
-
-
-
-
 class Dataset_ETT_minute(Dataset):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='ETTm1.csv',
