@@ -47,7 +47,6 @@ class Model(nn.Module):
         self.tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
         self.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
-        
 
        
         if configs.pretrained == True:
